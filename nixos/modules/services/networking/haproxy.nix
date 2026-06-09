@@ -6,12 +6,20 @@
 }:
 let
   cfg = config.services.haproxy;
-  haproxyCfg = pkgs.writeText "haproxy.conf" ''
-    global
-      # needed for hot-reload to work without dropping packets in multi-worker mode
-      stats socket /run/haproxy/haproxy.sock mode 600 expose-fd listeners level user
-    ${cfg.config}
-  '';
+  haproxyCfg = pkgs.writeTextFile {
+    name = "haproxy.conf";
+    text = ''
+      global
+        # needed for hot-reload to work without dropping packets in multi-worker mode
+        stats socket /run/haproxy/haproxy.sock mode 600 expose-fd listeners level user
+      ${cfg.config}
+    '';
+    derivationArgs.nativeBuildInputs = lib.optional cfg.checkConfig cfg.package;
+    checkPhase = lib.optionalString cfg.checkConfig ''
+      ln -s $out haproxy.cfg
+      haproxy -c -f haproxy.cfg
+    '';
+  };
 in
 {
   options = {
@@ -39,6 +47,15 @@ in
         description = ''
           Contents of the HAProxy configuration file,
           {file}`haproxy.conf`.
+        '';
+      };
+
+      checkConfig = lib.mkOption {
+        type = lib.types.bool;
+        default = true;
+        description = ''
+          Whether the config should be checked at build time.
+          When the config can't be checked during build time, disable this option.
         '';
       };
     };
